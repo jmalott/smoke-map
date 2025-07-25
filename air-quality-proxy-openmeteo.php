@@ -19,7 +19,10 @@ header('Access-Control-Allow-Headers: Content-Type');
 // Cache configuration
 define('CACHE_DURATION_HOURS', 12);
 define('CACHE_DURATION_SECONDS', CACHE_DURATION_HOURS * 3600);
-define('CACHE_DIR', __DIR__ . '/cache');
+$uploadDir = (function_exists('wp_upload_dir'))
+    ? wp_upload_dir()['basedir'] . '/smoke-map-cache'
+    : __DIR__ . '/cache';
+define('CACHE_DIR', $uploadDir);
 
 // Handle preflight OPTIONS request
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {

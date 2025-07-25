@@ -1,0 +1,10 @@
+{
+  "name": "smoke-map",
+  "version": "1.0.0",
+  "scripts": {
+    "build:css": "sass wp-smoke-map/assets/_scss/main.scss wp-smoke-map/assets/main.css"
+  },
+  "devDependencies": {
+    "sass": "^1.69.5"
+  }
+}
