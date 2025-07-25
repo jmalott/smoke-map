@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Central Oregon Fire Map</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+        }
+        
+        #map {
+            width: 100%;
+            height: 100vh;
+        }
+        
+        .fire-popup {
+            max-width: 300px;
+        }
+        
+        .fire-popup h3 {
+            margin: 0 0 10px 0;
+            color: #d63031;
+            font-size: 16px;
+        }
+        
+        .fire-info {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 5px;
+            font-size: 12px;
+        }
+        
+        .fire-info .label {
+            font-weight: bold;
+            color: #2d3436;
+        }
+        
+        .fire-info .value {
+            color: #636e72;
+        }
+        
+        .perimeter-popup {
+            max-width: 300px;
+        }
+        
+        .perimeter-popup h3 {
+            margin: 0 0 10px 0;
+            color: #e17055;
+            font-size: 16px;
+        }
+        
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 1000;
+            background: white;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+        
+        .legend {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: white;
+            padding: 15px;
+            border-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            z-index: 1000;
+            font-size: 12px;
+            max-width: 250px;
+        }
+        
+        .legend h4 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+        }
+        
+        .legend-section {
+            margin-bottom: 15px;
+        }
+        
+        .legend-section:last-child {
+            margin-bottom: 0;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin: 5px 0;
+        }
+        
+        .custom-fire-icon {
+            background: transparent !important;
+            border: none !important;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .fire-icon-svg {
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            transition: transform 0.2s ease;
+        }
+        
+        .fire-icon-svg.fire-1 { background-image: url('images/fire_1.svg'); }
+        .fire-icon-svg.fire-2 { background-image: url('images/fire_2.svg'); }
+        .fire-icon-svg.fire-3 { background-image: url('images/fire_3.svg'); }
+        .fire-icon-svg.fire-4 { background-image: url('images/fire_4.svg'); }
+        .fire-icon-svg.fire-5 { background-image: url('images/fire_5.svg'); }
+        
+        .legend-icon {
+            width: 20px;
+            height: 20px;
+            margin-right: 8px;
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+        }
+        
+        .legend-icon.fire-1 { background-image: url('images/fire_1.svg'); }
+        .legend-icon.fire-2 { background-image: url('images/fire_2.svg'); }
+        .legend-icon.fire-3 { background-image: url('images/fire_3.svg'); }
+        .legend-icon.fire-4 { background-image: url('images/fire_4.svg'); }
+        .legend-icon.fire-5 { background-image: url('images/fire_5.svg'); }
+        
+        .legend-line {
+            width: 20px;
+            height: 3px;
+            margin-right: 8px;
+            border-radius: 1px;
+        }
+        
+        .perimeter-line { background-color: #ff6b6b; }
+        
+        /* Zoom-responsive scaling */
+        .leaflet-zoom-anim .fire-icon-svg {
+            transition: none;
+        }
+        
+        /* Layer control styling */
+        .leaflet-control-layers {
+            background: white;
+            border-radius: 5px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+    </style>
+</head>
+<body>
+    <div id="loading" class="loading">Loading fire data...</div>
+    <div id="map"></div>
+    
+    <div class="legend">
+        <div class="legend-section">
+            <h4>Fire Incidents</h4>
+            <div class="legend-item">
+                <div class="legend-icon fire-1"></div>
+                <span>Fully Contained (100%)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-icon fire-2"></div>
+                <span>Mostly Contained (76-99%)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-icon fire-3"></div>
+                <span>Partially Contained (26-75%)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-icon fire-4"></div>
+                <span>Minimally Contained (1-25%)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-icon fire-5"></div>
+                <span>Not Contained (0%) / Prescribed</span>
+            </div>
+        </div>
+        
+        <div class="legend-section">
+            <h4>Fire Perimeters</h4>
+            <div class="legend-item">
+                <div class="legend-line perimeter-line"></div>
+                <span>Fire Boundaries</span>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        // Initialize map centered on Central Oregon
+        const map = L.map('map').setView([44.0, -121.5], 8);
+
+        // Add OpenStreetMap tiles
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        // Create layer groups for different data types
+        const incidentGroup = L.featureGroup().addTo(map);
+        const perimeterGroup = L.featureGroup().addTo(map);
+
+        // Add layer control
+        const layerControl = L.control.layers(null, {
+            "Fire Incidents": incidentGroup,
+            "Fire Perimeters": perimeterGroup
+        }).addTo(map);
+
+        // Store fire incident data for cross-referencing
+        let fireIncidentsData = new Map();
+
+        // Function to get fire icon number (1-5) based on containment
+        function getFireIconNumber(incidentType, percentContained) {
+            // Prescribed fires get fire_5.svg (most intense)
+            if (incidentType === 'RX') {
+                return 5;
+            }
+            
+            // For wildfires, determine containment level
+            if (percentContained === null || percentContained === undefined) {
+                return 5; // Unknown containment treated as not contained (fire_5.svg)
+            }
+            
+            if (percentContained >= 100) {
+                return 1; // Fully contained (fire_1.svg)
+            } else if (percentContained >= 76) {
+                return 2; // Mostly contained (fire_2.svg)
+            } else if (percentContained >= 26) {
+                return 3; // Partially contained (fire_3.svg)
+            } else if (percentContained >= 10) {
+                return 4; // Minimally contained (fire_4.svg)
+            } else {
+                return 5; // Not contained (fire_5.svg)
+            }
+        }
+
+        // Function to get fire marker size based on acres
+        function getFireSize(acres) {
+            if (!acres || acres === null) return 24;
+            if (acres < 100) return 20;
+            if (acres < 1000) return 28;
+            if (acres < 10000) return 36;
+            return 44;
+        }
+
+        // Function to calculate zoom-responsive size
+        function getZoomResponsiveSize(baseSize, currentZoom) {
+            const baseZoom = 8; // Reference zoom level
+            const scaleFactor = Math.pow(1.2, currentZoom - baseZoom);
+            return Math.max(baseSize * scaleFactor, 16); // Minimum size of 16px
+        }
+
+        // Function to format date
+        function formatDate(timestamp) {
+            if (!timestamp) return 'Unknown';
+            const date = new Date(timestamp);
+            return date.toLocaleDateString() + ' ' + date.toLocaleTimeString();
+        }
+
+        // Function to format acres
+        function formatAcres(acres) {
+            if (!acres || acres === null) return 'Unknown';
+            return acres.toLocaleString() + ' acres';
+        }
+
+        // Function to create incident popup content
+        function createIncidentPopupContent(fire) {
+            const attrs = fire.attributes;
+            return `
+                <div class="fire-popup">
+                    <h3>${attrs.IncidentName || 'Unknown Fire'}</h3>
+                    <div class="fire-info">
+                        <span class="label">Type:</span>
+                        <span class="value">${attrs.IncidentTypeCategory || 'Unknown'}</span>
+                        
+                        <span class="label">Daily Acres:</span>
+                        <span class="value">${formatAcres(attrs.DailyAcres)}</span>
+                        
+                        <span class="label">Contained:</span>
+                        <span class="value">${attrs.PercentContained ? attrs.PercentContained + '%' : 'Unknown'}</span>
+                        
+                        <span class="label">County:</span>
+                        <span class="value">${attrs.POOCounty || 'Unknown'}</span>
+                        
+                        <span class="label">State:</span>
+                        <span class="value">${attrs.POOState || 'Unknown'}</span>
+                        
+                        <span class="label">Cause:</span>
+                        <span class="value">${attrs.FireCause || 'Unknown'}</span>
+                        
+                        <span class="label">Discovery:</span>
+                        <span class="value">${formatDate(attrs.FireDiscoveryDateTime)}</span>
+                        
+                        <span class="label">Personnel:</span>
+                        <span class="value">${attrs.TotalIncidentPersonnel || 'Unknown'}</span>
+                        
+                        <span class="label">Structures Destroyed:</span>
+                        <span class="value">${(attrs.ResidencesDestroyed || 0) + (attrs.OtherStructuresDestroyed || 0)}</span>
+                        
+                        <span class="label">Injuries:</span>
+                        <span class="value">${attrs.Injuries || 0}</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Function to normalize fire names for matching
+        function normalizeFireName(name) {
+            if (!name) return '';
+            return name.toLowerCase()
+                .replace(/\s+/g, ' ')
+                .replace(/[^\w\s]/g, '')
+                .trim();
+        }
+
+        // Function to find matching incident data for a perimeter
+        function findMatchingIncident(perimeterAttrs) {
+            const perimeterName = normalizeFireName(
+                perimeterAttrs.IncidentName || 
+                perimeterAttrs.FireName || 
+                perimeterAttrs.INCIDENT_NAME || 
+                perimeterAttrs.FIRE_NAME
+            );
+            
+            if (!perimeterName) return null;
+
+            // Try to find exact match first
+            for (let [key, incidentData] of fireIncidentsData) {
+                const incidentName = normalizeFireName(incidentData.attributes.IncidentName);
+                if (incidentName === perimeterName) {
+                    return incidentData;
+                }
+            }
+
+            // Try partial matches
+            for (let [key, incidentData] of fireIncidentsData) {
+                const incidentName = normalizeFireName(incidentData.attributes.IncidentName);
+                if (incidentName && perimeterName && 
+                    (incidentName.includes(perimeterName) || perimeterName.includes(incidentName))) {
+                    return incidentData;
+                }
+            }
+
+            return null;
+        }
+
+        // Function to create perimeter popup content
+        function createPerimeterPopupContent(perimeter) {
+            const attrs = perimeter.attributes;
+            
+            // Try to find matching incident data
+            const matchingIncident = findMatchingIncident(attrs);
+            
+            if (matchingIncident) {
+                // Use incident popup content if we found a match
+                return createIncidentPopupContent(matchingIncident);
+            } else {
+                // Fall back to basic perimeter info
+                return `
+                    <div class="perimeter-popup">
+                        <h3>${attrs.IncidentName || attrs.FireName || attrs.INCIDENT_NAME || 'Fire Perimeter'}</h3>
+                        <div class="fire-info">
+                            <span class="label">GIS Acres:</span>
+                            <span class="value">${formatAcres(attrs.GIS_ACRES || attrs.ACRES)}</span>
+                            
+                            <span class="label">Date Created:</span>
+                            <span class="value">${formatDate(attrs.CreateDate || attrs.DATE_TIME)}</span>
+                            
+                            <span class="label">Source:</span>
+                            <span class="value">${attrs.Source || attrs.DATA_SOURCE || 'Unknown'}</span>
+                            
+                            <span class="label">Fire Year:</span>
+                            <span class="value">${attrs.FireYear || attrs.FIRE_YEAR || 'Unknown'}</span>
+                            
+                            <span class="label">Agency:</span>
+                            <span class="value">${attrs.Agency || attrs.AGENCY || 'Unknown'}</span>
+                            
+                            <span class="label">Unit ID:</span>
+                            <span class="value">${attrs.UnitID || attrs.UNIT_ID || 'Unknown'}</span>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        // Function to filter fires for Oregon
+        function isOregonFire(fire) {
+            const state = fire.attributes.POOState || fire.attributes.STATE;
+            return state === 'US-OR' || state === 'OR';
+        }
+
+        // Function to update icon sizes based on zoom level
+        function updateIconSizes() {
+            const currentZoom = map.getZoom();
+            
+            // Update all fire markers
+            fireMarkers.forEach(markerData => {
+                const { marker, baseSize } = markerData;
+                const newSize = getZoomResponsiveSize(baseSize, currentZoom);
+                
+                // Update the icon size
+                const iconElement = marker.getElement();
+                if (iconElement) {
+                    const svgElement = iconElement.querySelector('.fire-icon-svg');
+                    if (svgElement) {
+                        svgElement.style.width = newSize + 'px';
+                        svgElement.style.height = newSize + 'px';
+                    }
+                }
+            });
+        }
+
+        // Store fire markers for zoom updates
+        let fireMarkers = [];
+        let loadingCount = 0;
+        let totalLoading = 2;
+
+        // Function to check if loading is complete
+        function checkLoadingComplete() {
+            loadingCount++;
+            if (loadingCount >= totalLoading) {
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+
+        // Load and display fire incident data
+        async function loadIncidentData() {
+            try {
+                const response = await fetch('fire-proxy-nifc.php?endpoint=incidents&bounds=-122.0,43.0,-120.5,45.0');
+                const data = await response.json();
+                
+                // Filter for Oregon fires and add to map
+                const oregonFires = data.features.filter(isOregonFire);
+                
+                if (oregonFires.length > 0) {
+                    oregonFires.forEach(fire => {
+                        const coords = fire.geometry;
+                        const attrs = fire.attributes;
+                        
+                        // Store incident data for cross-referencing with perimeters
+                        const fireKey = normalizeFireName(attrs.IncidentName);
+                        if (fireKey) {
+                            fireIncidentsData.set(fireKey, fire);
+                        }
+                        
+                        // Calculate base icon size based on fire acreage
+                        const baseSize = getFireSize(attrs.DailyAcres);
+                        const currentSize = getZoomResponsiveSize(baseSize, map.getZoom());
+                        
+                        // Get the appropriate fire icon number (1-5)
+                        const fireIconNumber = getFireIconNumber(attrs.IncidentTypeCategory, attrs.PercentContained);
+                        
+                        // Create custom div icon with SVG background
+                        const fireIcon = L.divIcon({
+                            className: 'custom-fire-icon',
+                            html: `<div class="fire-icon-svg fire-${fireIconNumber}" style="width: ${currentSize}px; height: ${currentSize}px;"></div>`,
+                            iconSize: [currentSize, currentSize],
+                            iconAnchor: [currentSize / 2, currentSize / 2],
+                            popupAnchor: [0, -currentSize / 2]
+                        });
+                        
+                        // Create marker with custom icon
+                        const marker = L.marker([coords.y, coords.x], {
+                            icon: fireIcon
+                        });
+                        
+                        // Add popup with fire information
+                        marker.bindPopup(createIncidentPopupContent(fire));
+                        
+                        // Store marker data for zoom updates
+                        fireMarkers.push({
+                            marker: marker,
+                            baseSize: baseSize,
+                            fireIconNumber: fireIconNumber,
+                            coords: [coords.y, coords.x]
+                        });
+                        
+                        // Add to incident group
+                        incidentGroup.addLayer(marker);
+                    });
+                    
+                    console.log(`Loaded ${oregonFires.length} Oregon fire incidents`);
+                }
+                
+            } catch (error) {
+                console.error('Error loading incident data:', error);
+            }
+            
+            checkLoadingComplete();
+        }
+
+        // Load and display fire perimeter data
+        async function loadPerimeterData() {
+            try {
+                const response = await fetch('fire-proxy-nifc.php?endpoint=perimeters&bounds=-122.0,43.0,-120.5,45.0');
+                const data = await response.json();
+                
+                if (data.features && data.features.length > 0) {
+                    // Filter for Oregon perimeters (if state info available)
+                    const oregonPerimeters = data.features.filter(perimeter => {
+                        // Some perimeters might not have state info, so we'll include all in the bounding box
+                        return true;
+                    });
+                    
+                    oregonPerimeters.forEach(perimeter => {
+                        const geometry = perimeter.geometry;
+                        const attrs = perimeter.attributes;
+                        
+                        // Handle different geometry types
+                        let layer;
+                        try {
+                            if (geometry.type === 'Polygon') {
+                                // GeoJSON format
+                                const coordinates = geometry.coordinates;
+                                if (coordinates && coordinates.length > 0) {
+                                    const latLngs = coordinates[0].map(coord => [coord[1], coord[0]]);
+                                    layer = L.polygon(latLngs, {
+                                        color: '#ff6b6b',
+                                        weight: 2,
+                                        opacity: 0.8,
+                                        fillColor: '#ff6b6b',
+                                        fillOpacity: 0.2
+                                    });
+                                }
+                            } else if (geometry.type === 'MultiPolygon') {
+                                // GeoJSON MultiPolygon
+                                const coordinates = geometry.coordinates;
+                                if (coordinates && coordinates.length > 0) {
+                                    const polygons = coordinates.map(polygon => 
+                                        polygon[0].map(coord => [coord[1], coord[0]])
+                                    );
+                                    layer = L.polygon(polygons, {
+                                        color: '#ff6b6b',
+                                        weight: 2,
+                                        opacity: 0.8,
+                                        fillColor: '#ff6b6b',
+                                        fillOpacity: 0.2
+                                    });
+                                }
+                            } else if (geometry.rings && Array.isArray(geometry.rings)) {
+                                // ArcGIS format with rings - handle multiple rings
+                                const allRings = geometry.rings.map(ring => {
+                                    if (!Array.isArray(ring) || ring.length < 3) return null;
+                                    return ring.map(coord => {
+                                        if (!Array.isArray(coord) || coord.length < 2) return null;
+                                        return [coord[1], coord[0]]; // Convert [lng, lat] to [lat, lng]
+                                    }).filter(coord => coord !== null);
+                                }).filter(ring => ring !== null && ring.length >= 3);
+                                
+                                if (allRings.length > 0) {
+                                    layer = L.polygon(allRings, {
+                                        color: '#ff6b6b',
+                                        weight: 2,
+                                        opacity: 0.8,
+                                        fillColor: '#ff6b6b',
+                                        fillOpacity: 0.2
+                                    });
+                                }
+                            }
+                        } catch (error) {
+                            console.error('Error processing perimeter geometry:', error);
+                        }
+                        
+                        if (layer) {
+                            // Add popup with perimeter information (will show incident data if match found)
+                            layer.bindPopup(createPerimeterPopupContent(perimeter));
+                            
+                            // Add to perimeter group
+                            perimeterGroup.addLayer(layer);
+                        }
+                    });
+                    
+                    console.log(`Loaded ${oregonPerimeters.length} fire perimeters`);
+                } else {
+                    console.log('No perimeter features found');
+                }
+                
+            } catch (error) {
+                console.error('Error loading perimeter data:', error);
+            }
+            checkLoadingComplete();
+        }
+
+        // Function to fit map bounds to all data
+        function fitMapToBounds() {
+            const allLayers = [];
+            
+            // Add incident layers
+            incidentGroup.eachLayer(layer => allLayers.push(layer));
+            
+            // Add perimeter layers
+            perimeterGroup.eachLayer(layer => allLayers.push(layer));
+            
+            if (allLayers.length > 0) {
+                const group = new L.featureGroup(allLayers);
+                map.fitBounds(group.getBounds(), { padding: [20, 20] });
+            }
+        }
+
+        // Add zoom event listener to update icon sizes
+        map.on('zoom', updateIconSizes);
+        map.on('zoomend', updateIconSizes);
+
+        // Initialize the map by loading both data types
+        // Load incidents first so the data is available for perimeter matching
+        loadIncidentData().then(() => {
+            loadPerimeterData().then(() => {
+                // Fit map to show all data after both datasets are loaded
+                setTimeout(fitMapToBounds, 100);
+            });
+        });
+    </script>
+</body>
+</html>

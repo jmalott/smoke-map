@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visit Central Oregon - Smoke Forecast, Fire, Traffic & Air Quality Map</title>
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css?family=Poppins:100,100italic,200,200italic,300,300italic,regular,italic,500,500italic,600,600italic,700,700italic,800,800italic,900,900italic&#038;subset=devanagari,latin,latin-ext&#038;display=swap" rel="stylesheet">
+
+    <link href="styles/main.css" rel="stylesheet">
+
+</head>
+<body>
+    
+    <div class="custom-tile-chooser">
+        <button id="defaultTilesBtn" class="custom-tile-chooser-button active" title="Default Map">🗺️</button>
+        <button id="satelliteTilesBtn" class="custom-tile-chooser-button" title="Satellite Map">🛰️</button>
+    </div>
+
+    <div id="map"></div>
+    
+    <div class="loading" id="loading">
+        <h3 id="loadingTitle">Interactive Fire, Air, and Road Conditions Map</h3>
+        <div class="loading-progress" id="progressContainer" style="display: none;">
+            <div class="loading-bar" id="loadingBar"></div>
+        </div>
+        <p id="loadingDetails">View past and future forecast smoke data, along with current fires, air quality, and traffic information in the region. Control playback speed once the data is loaded.</p>
+        <div id="errorLog" class="error-log" style="display: none;"></div>
+        <button onclick="startProgressiveLoading()" id="loadButton">Show Me The Data!</button>
+        <p id="loadingDisclaimer"><i><b>Sources:</b> The National Weather Service (smoke forecast), The National Interagency Fire Center (fires), Open-Meteo (air quality), ODOT (road conditions).</i></p>
+    </div>
+    
+    <div id="controls" class="controls">
+        <div class="controls-grid">
+            <div class="time-section">               
+                <div class="slider-container">
+                    <input type="range" class="time-slider" id="timeSlider" 
+                        min="0" max="47" value="0" step="1" onchange="onTimeSliderChange()">
+                    <div class="slider-labels">
+                        <span id="sliderStartLabel">-12h</span>
+                        <span id="sliderEndLabel">+36h</span>
+                    </div>
+                </div>
+
+                <div class="time-header">
+                    <div class="time-display" id="currentTimeDisplay"></div>
+                    <div class="animation-controls">
+                        <div class="speed-control" id="speedControlContainer">
+                            Speed: <select id="speedSelect" onchange="updateAnimationSpeed()" disabled>
+                                <option value="2000">Slow</option>
+                                <option value="1000" selected>Normal</option>
+                                <option value="500">Fast</option>
+                                <option value="250">Very Fast</option>
+                            </select>
+                        </div>
+                        <button class="play-button" id="playButton" onclick="toggleAnimation()">▶ Play</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="layer-toggles">
+                <div class="toggle-group">
+                    <button id="toggleSmoke" class="toggle-btn smoke"><span>Hide </span>Smoke</button>
+                    <button id="toggleFires" class="toggle-btn fire"><span>Hide </span>Fires</button>
+                </div>
+                <div class="toggle-group">
+                    <button id="toggleCameras" class="toggle-btn traffic"><span>Hide </span>Cameras</button>
+                    <button id="toggleIncidents" class="toggle-btn traffic"><span>Hide </span>Incidents</button>
+                </div>
+                <div id="airQualityToggleGroup" class="toggle-group">
+                    <button id="toggleAirQuality" class="toggle-btn air-quality"><span>Hide </span>Air Quality</button>
+                </div>
+            </div>
+            
+            <div class="legend-section">
+                <div class="legend-items">
+                    <div class="legend-item">
+                        <div class="legend-color" style="background-color: #ffff99;"></div>
+                        <span>Light Smoke</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background-color: #ffcc66;"></div>
+                        <span>Moderate</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background-color: #ff9933;"></div>
+                        <span>Heavy Smoke</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-color" style="background-color: #cc6600;"></div>
+                        <span>Dense Smoke</span>
+                    </div>
+                    <div class="legend-item">
+                        <div class="legend-icon fire-icon">🔥</div>
+                        <span>Active Fires</span>
+                    </div>
+                    <div class="legend-item" id="airQualityLegendItem" style="display: none;">
+                        <div class="legend-icon air-quality-icon">🌬️</div>
+                        <span>Air Quality</span>
+                    </div>
+                    <div class="legend-item">
+                        <!-- KEYWORD custom_camera_icon -->
+                        <div class="legend-icon camera-icon">📸</div>
+                        <span>Cameras</span>
+                    </div>
+                    <div id="legend-incident-icon" class="legend-item">
+                        <div class="legend-icon incident-icon">⚠️</div>
+                        <span>Incidents</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+        
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js"></script>
+    
+    <script src="scripts/main.js"></script>
+</body>
+</html>
